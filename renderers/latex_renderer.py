@@ -298,14 +298,17 @@ def render_pdf(document: Any, ruleset: Dict[str, Any], output_path: str) -> str:
     Tries (in order): tectonic, xelatex, pdflatex, WeasyPrint(html fallback).
     Returns the absolute output_path on success.
     """
-    # Try LaTeX engines first
+    # Try LaTeX engines first; fall through to WeasyPrint if compile fails
     engine = _which("tectonic", "xelatex", "pdflatex")
     if engine:
-        tex = render_latex(document, ruleset)
-        with tempfile.TemporaryDirectory() as workdir:
-            pdf_path = _compile_with_engine(tex, engine, workdir)
-            shutil.copyfile(pdf_path, output_path)
-        return output_path
+        try:
+            tex = render_latex(document, ruleset)
+            with tempfile.TemporaryDirectory() as workdir:
+                pdf_path = _compile_with_engine(tex, engine, workdir)
+                shutil.copyfile(pdf_path, output_path)
+            return output_path
+        except Exception:
+            pass  # engine found but failed (e.g. missing packages) — try WeasyPrint
 
     # WeasyPrint fallback (HTML -> PDF)
     from .html_renderer import render_html
