@@ -1,0 +1,334 @@
+{
+    "ruleset_name": "StyleLock_UiTM_GADING_APA7_rules_v2",
+    "source_template": "UiTM Journal Template 2024 APA — Revised Version 6.0 (04 Feb 2026)",
+    "notes": "Forensic-faithful UiTM/GADING ruleset. Shares the body styles of mjcet_ruleset.json (same DOCX template); only branding, DOI prefix, and header/footer text differ. The legacy gading_ruleset.json is preserved for backward compatibility.",
+    "journal": {
+        "name": "GADING Journal for the Social Sciences",
+        "short_name": "GADING",
+        "e_issn": "2600-7568",
+        "doi_prefix": "10.24191/gadingss",
+        "doi_pattern": "https://doi.org/10.24191/gadingss.vXiX.XXXXX",
+        "url": "https://gadingssuitm.com/index.php/gadingss",
+        "copyright_text": "©UiTM Press, Universiti Teknologi MARA",
+        "publisher": "UiTM Press"
+    },
+    "page_setup": {
+        "paper_size": "B5_JIS",
+        "width_twips": 10886,
+        "height_twips": 14854,
+        "margins_twips": {
+            "top": 754,
+            "bottom": 1418,
+            "left": 1191,
+            "right": 1191,
+            "header": 907,
+            "footer": 1202,
+            "gutter": 0
+        },
+        "mirror_margins": true,
+        "even_odd_headers": true,
+        "title_pg": true,
+        "columns": 1,
+        "default_tab_stop_twips": 720,
+        "compatibility_mode": 15
+    },
+    "fonts": {
+        "main_text": {
+            "family": "Times New Roman",
+            "size_pt": 9
+        },
+        "table_text": {
+            "family": "Times New Roman",
+            "size_pt": 8
+        },
+        "diagram_labels": {
+            "family": "Times New Roman",
+            "size_pt": 8,
+            "max_size_pt": 10
+        },
+        "math": {
+            "family": "Cambria Math"
+        }
+    },
+    "spacing": {
+        "main_text_line_spacing": "single",
+        "paragraph_spacing_before_after_pt": 0,
+        "main_text_line_spacing_twips": 276,
+        "main_text_line_spacing_rule": "auto",
+        "main_text_spacing_after_twips": 120,
+        "main_text_first_line_indent_twips": 340
+    },
+    "headings": {
+        "Heading A": {
+            "bold": true,
+            "italic": false,
+            "font_size_pt": 10,
+            "alignment": "left",
+            "case": "upper",
+            "all_caps": true,
+            "color": "000000",
+            "indent_left_twips": 426,
+            "indent_hanging_twips": 426,
+            "spacing_before_twips": 360,
+            "spacing_after_twips": 240,
+            "line_spacing_twips": 240,
+            "line_spacing_rule": "exact",
+            "outline_level": 0,
+            "numbering": {
+                "format": "decimal",
+                "pattern": "%1.",
+                "examples": ["1.", "2.", "3."],
+                "num_id": 18,
+                "abstract_num_id": 16,
+                "ilvl": 0
+            }
+        },
+        "Heading B": {
+            "bold": true,
+            "italic": false,
+            "font_size_pt": 10,
+            "alignment": "left",
+            "case": "title_case",
+            "color": "000000",
+            "indent_left_twips": 426,
+            "indent_hanging_twips": 426,
+            "spacing_before_twips": 240,
+            "spacing_after_twips": 0,
+            "outline_level": 1,
+            "numbering": {
+                "format": "decimal",
+                "pattern": "%1.%2",
+                "examples": ["1.1", "1.2", "2.1"],
+                "num_id": 16,
+                "abstract_num_id": 11,
+                "ilvl": 1
+            }
+        },
+        "Heading C": {
+            "bold": false,
+            "italic": true,
+            "font_size_pt": 10,
+            "alignment": "left",
+            "spacing_before_twips": 240,
+            "spacing_after_twips": 60,
+            "line_spacing_twips": 240,
+            "line_spacing_rule": "exact",
+            "outline_level": 2,
+            "numbering": {
+                "format": "decimal",
+                "pattern": "%1.%2.%3",
+                "examples": ["2.2.1", "2.2.2"],
+                "manual": true
+            }
+        }
+    },
+    "title_block": {
+        "title": {
+            "font_size_pt": 17,
+            "bold": false,
+            "alignment": "center",
+            "line_spacing_twips": 401,
+            "line_spacing_rule": "auto",
+            "spacing_after_twips": 240,
+            "case": "sentence_case",
+            "suppress_hyphenation": true
+        },
+        "author": {
+            "font_size_pt": 13,
+            "alignment": "center",
+            "spacing_after_twips": 160,
+            "line_spacing_twips": 300,
+            "line_spacing_rule": "exact",
+            "superscript_affiliations": true,
+            "corresponding_marker": "*"
+        },
+        "affiliation": {
+            "font_size_pt": 8,
+            "italic": true,
+            "alignment": "center",
+            "line_spacing_twips": 200,
+            "line_spacing_rule": "exact"
+        }
+    },
+    "abstract": {
+        "font_size_pt": 9,
+        "alignment": "justify",
+        "line_spacing_twips": 220,
+        "line_spacing_rule": "exact",
+        "max_words": 300,
+        "implementation": "article_info_table_right_column"
+    },
+    "article_info_table": {
+        "columns": 3,
+        "total_width_twips": 8558,
+        "column_widths_twips": [2874, 260, 5424],
+        "rows": 3,
+        "borders": {
+            "top": "single_6pt_black",
+            "bottom": "single_6pt_black",
+            "vertical": "none"
+        },
+        "left_column_content": ["article_history", "keywords", "doi"],
+        "right_column_content": ["abstract"],
+        "max_keywords": 6
+    },
+    "tables": {
+        "content": {
+            "font": "Times New Roman",
+            "size_pt": 8,
+            "line_spacing": "single",
+            "line_spacing_twips": 200,
+            "line_spacing_rule": "exact",
+            "spacing_after_twips": 80
+        },
+        "borders": {
+            "vertical": false,
+            "horizontal": [
+                "top",
+                "below_header",
+                "bottom"
+            ],
+            "border_size_halfpts": 4,
+            "border_color": "000000"
+        },
+        "layout": "fixed",
+        "caption": {
+            "style_id": "Caption",
+            "font_size_pt": 8,
+            "bold": true,
+            "alignment": "left",
+            "indent_left_twips": -108,
+            "placement": "above_table",
+            "format": "Table X. [caption text]",
+            "numbering": "Arabic_consecutive",
+            "spacing_before_twips": 120,
+            "spacing_after_twips": 120,
+            "line_spacing_twips": 200,
+            "line_spacing_rule": "exact"
+        }
+    },
+    "figures": {
+        "caption": {
+            "style_id": "FigureCaption",
+            "font_size_pt": 9,
+            "alignment": "left",
+            "indent_left_twips": -108,
+            "placement": "below_figure",
+            "format": "Fig. X. [caption text]",
+            "numbering": "Arabic_consecutive",
+            "spacing_before_twips": 120,
+            "spacing_after_twips": 120,
+            "line_spacing_twips": 200,
+            "line_spacing_rule": "exact"
+        },
+        "min_resolution_px": 500,
+        "allowed_formats": ["PNG", "JPG", "JPEG", "EMF"],
+        "diagram_requirement": "editable_vector",
+        "embedded_text_font": "Times New Roman",
+        "embedded_text_max_size_pt": 10,
+        "source_note": {
+            "font_size_pt": 9,
+            "trailing_period": false,
+            "format": "Source: [citation]"
+        }
+    },
+    "equations": {
+        "implementation": "borderless_table",
+        "table_width_twips": 8732,
+        "equation_cell_alignment": "left",
+        "number_cell_alignment": "right",
+        "number_format": "(%1)",
+        "numbering": "Arabic_consecutive_parenthesised",
+        "math_font": "Cambria Math",
+        "spacing_before_twips": 240,
+        "spacing_after_twips": 240,
+        "color": "000000"
+    },
+    "references": {
+        "smart_format": true,
+        "style": "APA 7th",
+        "hanging_indent_in": 0.5,
+        "hanging_indent_twips": 720,
+        "indent_left_twips": 720,
+        "hanging_indent_source": "APA 7 standard (overrides template's 357 twips / 0.248 in)",
+        "title_casing": "sentence_case",
+        "journal_casing": "title_case",
+        "italicize_journal": true,
+        "italicize_volume": true,
+        "italicize_book_title": true,
+        "remove_doi_period": true,
+        "doi_format": "https://doi.org/XXXXXXX",
+        "page_range_separator": "en_dash",
+        "ordering": "alphabetical_then_chronological",
+        "max_authors_listed": 20,
+        "et_al_threshold_in_text": 3,
+        "ampersand_before_final_author": true,
+        "same_author_same_year_suffix": "a_b_c",
+        "font_size_pt": 9,
+        "alignment": "justify",
+        "spacing_after_twips": 180,
+        "line_spacing_twips": 220,
+        "line_spacing_rule": "exact",
+        "widow_control": false
+    },
+    "footnotes": {
+        "style_id": "Footnote",
+        "font_size_pt": 8,
+        "alignment": "justify",
+        "first_line_indent_twips": 240,
+        "line_spacing_twips": 200,
+        "line_spacing_rule": "exact",
+        "superscript_mark": true,
+        "placement": "first_page_footer",
+        "corresponding_author_format": "*Corresponding author. E-mail address: [email]"
+    },
+    "header_footer": {
+        "header": {
+            "font_size_pt": 8,
+            "italic": true,
+            "odd_page": "First Author et al. / GADING Journal for the Social Sciences (Year) Vol. X, No. X",
+            "even_page": "First Author et al. / GADING Journal for the Social Sciences (Year) Vol. X, No. X",
+            "first_page": "e-ISSN: 2600-7568 | Available online at https://gadingssuitm.com/index.php/gadingss | GADING Journal for the Social Sciences (Year) Vol. X, No. X"
+        },
+        "footer": {
+            "font_size_pt": 8,
+            "italic": false,
+            "first_page": "*Corresponding author. E-mail address: [email] | https://doi.org/10.24191/gadingss.vXiX.XXXXX ©UiTM Press, Universiti Teknologi MARA",
+            "odd_page": "https://doi.org/10.24191/gadingss.vXiX.XXXXX ©UiTM Press, Universiti Teknologi MARA",
+            "even_page": "https://doi.org/10.24191/gadingss.vXiX.XXXXX ©UiTM Press, Universiti Teknologi MARA"
+        }
+    },
+    "section_order": {
+        "mandatory": [
+            "title",
+            "authors",
+            "affiliations",
+            "article_info_abstract_table",
+            "introduction",
+            "body_sections",
+            "conclusion",
+            "acknowledgements_funding",
+            "conflict_of_interest",
+            "authors_contributions",
+            "data_availability",
+            "ethics_statement",
+            "references"
+        ],
+        "conditional": ["ai_declaration"],
+        "optional": ["appendix"]
+    },
+    "editorial_rules": {
+        "forbidden": [
+            "manual_paragraph_adjustment",
+            "manual_heading_numbering",
+            "manual_indentation",
+            "new_heading_styles",
+            "non_editable_figures",
+            "line_end_hyphenation",
+            "copy_pasted_heading_text",
+            "altered_template_styles"
+        ],
+        "required_word_version": "Word 2010+",
+        "submission_format": "docx"
+    }
+}

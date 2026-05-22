@@ -1,0 +1,62 @@
+{
+    "ruleset_name": "StyleLock_UiTM_GADING_APA7_rules",
+    "source_template": "UiTM Journal Template 2024 APA (Updated)",
+    "fonts": {
+        "main_text": {
+            "family": "Times New Roman",
+            "size_pt": 9
+        },
+        "table_text": {
+            "family": "Times New Roman",
+            "size_pt": 8
+        },
+        "diagram_labels": {
+            "family": "Times New Roman",
+            "size_pt": 8
+        }
+    },
+    "spacing": {
+        "main_text_line_spacing": "single",
+        "paragraph_spacing_before_after_pt": 0
+    },
+    "headings": {
+        "Heading A": {
+            "bold": true,
+            "font_size_pt": 10,
+            "alignment": "left"
+        },
+        "Heading B": {
+            "case": "title_case",
+            "alignment": "left"
+        },
+        "Heading C": {
+            "alignment": "left"
+        }
+    },
+    "tables": {
+        "content": {
+            "font": "Times New Roman",
+            "size_pt": 8,
+            "line_spacing": "single"
+        },
+        "borders": {
+            "vertical": false,
+            "horizontal": [
+                "top",
+                "below_header",
+                "bottom"
+            ]
+        }
+    },
+    "references": {
+        "smart_format": true,
+        "style": "APA 7th",
+        "hanging_indent_in": 0.5,
+        "hanging_indent_twips": 720,
+        "title_casing": "sentence_case",
+        "journal_casing": "title_case",
+        "italicize_journal": true,
+        "italicize_volume": true,
+        "remove_doi_period": true
+    }
+}

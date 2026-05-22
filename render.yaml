@@ -1,0 +1,19 @@
+# Render service config for the StyleLock backend.
+# Push to GitHub, then in Render dashboard: New > Blueprint > select this repo.
+# Render reads this file and provisions everything automatically.
+
+services:
+  - type: web
+    name: stylelock-backend
+    runtime: python
+    region: singapore
+    plan: free
+    buildCommand: pip install --upgrade pip && pip install -r requirements.txt
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /render/ruleset
+
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.9
+      - key: FRONTEND_URL
+        value: "*"
