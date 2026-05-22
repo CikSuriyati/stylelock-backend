@@ -123,6 +123,34 @@ class DocxRenderer:
             body = self.doc.element.body
             children = list(body.iterchildren())
             keep_indices = {0, 1, 2, 3, 4, 5, 7}  # branding slots + logo table
+
+            # The template has two sections:
+            #   - An inner sectPr (inside a paragraph around element 92) that carries all
+            #     headerReference / footerReference entries including the first-page logo header.
+            #   - The final sectPr at the end of the body which has <w:titlePg/> but
+            #     NO headerReference entries (it inherits from the inner sectPr).
+            # When we strip the inner sectPr paragraph the only remaining sectPr has no
+            # header references, so the logo disappears.  Fix: copy the references into the
+            # final sectPr BEFORE removing anything.
+            from copy import deepcopy
+            final_sectPr = body.find(qn("w:sectPr"))
+            if final_sectPr is not None:
+                existing_types = {
+                    el.get(qn("w:type"))
+                    for el in final_sectPr.findall(qn("w:headerReference"))
+                }
+                for child_el in children:
+                    if child_el.tag == qn("w:sectPr"):
+                        continue
+                    for inner in child_el.findall(".//" + qn("w:sectPr")):
+                        for ref in inner.findall(qn("w:headerReference")):
+                            ref_type = ref.get(qn("w:type"))
+                            if ref_type not in existing_types:
+                                final_sectPr.insert(0, deepcopy(ref))
+                                existing_types.add(ref_type)
+                        for ref in inner.findall(qn("w:footerReference")):
+                            final_sectPr.insert(0, deepcopy(ref))
+
             for idx, child in enumerate(children):
                 # Always keep sectPr (page layout) at the very end
                 if child.tag == qn("w:sectPr"):
