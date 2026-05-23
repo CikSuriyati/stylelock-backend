@@ -157,8 +157,16 @@ class DocxRenderer:
                     continue
                 if idx not in keep_indices:
                     body.remove(child)
+
+            # Store the template placeholder paragraphs so build() can fill them
+            # instead of appending new paragraphs below the template structure.
+            # After removal, self.doc.paragraphs order matches the kept body elements:
+            #   [0] empty  [1] empty
+            #   [2] title placeholder  [3] author  [4] affil1  [5] affil2
+            self._has_template = True
         else:
             self.doc = Document()
+            self._has_template = False
             self._set_default_style()
 
     # ----- style setup (when no template) -----
@@ -171,6 +179,90 @@ class DocxRenderer:
         pf.line_spacing = self.line_spacing
         pf.space_before = Pt(self.para_gap)
         pf.space_after = Pt(self.para_gap)
+
+    # ----- template placeholder helpers -----
+
+    @staticmethod
+    def _fill_para(para, text: str):
+        """Replace all runs in a template placeholder with new text.
+        Preserves the paragraph's style (font, size, colour come from the style).
+        """
+        p_elem = para._element
+        for r in list(p_elem.findall(qn("w:r"))):
+            p_elem.remove(r)
+        for hl in list(p_elem.findall(qn("w:hyperlink"))):
+            p_elem.remove(hl)
+        if text:
+            para.add_run(text)
+
+    @staticmethod
+    def _fill_cell_text(cell, paragraphs_text: List[str]):
+        """Replace ALL paragraph content in a table cell with new lines of text.
+        Reuses the existing paragraph elements to keep cell formatting/borders.
+        """
+        existing = cell.paragraphs
+        # Clear every paragraph run
+        for p in existing:
+            for r in list(p._element.findall(qn("w:r"))):
+                p._element.remove(r)
+            for hl in list(p._element.findall(qn("w:hyperlink"))):
+                p._element.remove(hl)
+
+        for i, txt in enumerate(paragraphs_text):
+            if i < len(existing):
+                if txt:
+                    existing[i].add_run(txt)
+            else:
+                # Need an extra paragraph
+                from docx.oxml import OxmlElement
+                new_p = OxmlElement("w:p")
+                cell._tc.append(new_p)
+                from docx.text.paragraph import Paragraph as _Para
+                p = _Para(new_p, cell._tc)
+                if txt:
+                    p.add_run(txt)
+
+    def _inject_template_front_matter(self, md):
+        """Fill the template's built-in placeholder paragraphs and the ARTICLE
+        INFO table with manuscript front-matter.  Called instead of
+        _render_front_matter when a GADING/MJCET template is loaded."""
+        paras = self.doc.paragraphs
+        # para[2] = title placeholder
+        if len(paras) > 2:
+            self._fill_para(paras[2], md.title or "")
+        # para[3] = author line (all authors joined)
+        if len(paras) > 3:
+            self._fill_para(paras[3], ",  ".join(md.authors) if md.authors else "")
+        # para[4] = affiliation 1, para[5] = affiliation 2
+        for slot, aff in enumerate(md.affiliations[:2]):
+            if len(paras) > 4 + slot:
+                self._fill_para(paras[4 + slot], aff)
+        # Clear any unused affiliation slots
+        for slot in range(len(md.affiliations), 2):
+            if len(paras) > 4 + slot:
+                self._fill_para(paras[4 + slot], "")
+
+        if not self.doc.tables:
+            return
+        tbl = self.doc.tables[0]
+
+        # Abstract → row 1, col 2 (vertically merged with row 2, col 2)
+        if len(tbl.rows) > 1 and len(tbl.rows[1].cells) > 2:
+            abstract_cell = tbl.rows[1].cells[2]
+            self._fill_cell_text(abstract_cell, [md.abstract or ""])
+
+        # Keywords → row 2, col 0 (structure: "Keywords:" header, then one kw per para)
+        if md.keywords and len(tbl.rows) > 2 and len(tbl.rows[2].cells) > 0:
+            kw_cell = tbl.rows[2].cells[0]
+            kw_list = [k.strip() for k in md.keywords.split(",") if k.strip()]
+            # Preserve "Keywords:" header in para[0], fill paras[1..6], keep DOI block
+            cell_paras = kw_cell.paragraphs
+            for i, kw in enumerate(kw_list[:6]):
+                idx = 1 + i
+                if idx < len(cell_paras):
+                    for r in list(cell_paras[idx]._element.findall(qn("w:r"))):
+                        cell_paras[idx]._element.remove(r)
+                    cell_paras[idx].add_run(kw)
 
     # ----- low-level paragraph helpers -----
 
@@ -362,7 +454,10 @@ class DocxRenderer:
 
     def build(self, document) -> Document:
         doc_obj = normalize_input(document)
-        self._render_front_matter(doc_obj.metadata)
+        if self._has_template:
+            self._inject_template_front_matter(doc_obj.metadata)
+        else:
+            self._render_front_matter(doc_obj.metadata)
 
         for b in doc_obj.blocks:
             if b.type == "heading":
