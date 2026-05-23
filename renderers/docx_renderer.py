@@ -50,6 +50,31 @@ def _line_spacing_value(spec: str) -> float:
     return {"single": 1.0, "1.5": 1.5, "double": 2.0}.get(spec, 1.0)
 
 
+def _t2pt(twips: float) -> float:
+    """Convert twips to points (1 pt = 20 twips)."""
+    return twips / 20.0
+
+
+def _sp(para, before_pt: float = 0, after_pt: float = 0,
+        left_indent_pt: float = 0, first_line_pt: float = 0,
+        line_spacing: Optional[float] = None):
+    """Apply spacing, indent and line-spacing directly on a paragraph's format.
+    All values in points. Uses direct formatting so the result is independent
+    of whether the named style exists in the document.
+    """
+    pf = para.paragraph_format
+    if before_pt:
+        pf.space_before = Pt(before_pt)
+    if after_pt:
+        pf.space_after = Pt(after_pt)
+    if left_indent_pt:
+        pf.left_indent = Pt(left_indent_pt)
+    if first_line_pt:
+        pf.first_line_indent = Pt(first_line_pt)
+    if line_spacing is not None:
+        pf.line_spacing = line_spacing
+
+
 def _apply_runs(paragraph, runs: List[RunSpan], default_font: str, default_size: int):
     for r in runs:
         run = paragraph.add_run(r.text)
@@ -296,7 +321,11 @@ class DocxRenderer:
 
     # ----- low-level paragraph helpers -----
 
-    def _new_para(self, *, style: Optional[str] = None, alignment: Optional[str] = None, hanging_in: Optional[float] = None):
+    def _new_para(self, *, style: Optional[str] = None, alignment: Optional[str] = None):
+        """Add a paragraph, optionally applying a named style and alignment.
+        Does NOT override line-spacing or indent — callers must do that
+        explicitly so each block type gets the correct direct formatting.
+        """
         p = self.doc.add_paragraph()
         if style:
             try:
@@ -305,20 +334,15 @@ class DocxRenderer:
                 pass  # style not defined in template, fall through to Normal
         if alignment and alignment in _ALIGN_MAP:
             p.alignment = _ALIGN_MAP[alignment]
-        pf = p.paragraph_format
-        pf.line_spacing = self.line_spacing
-        if hanging_in is not None:
-            pf.left_indent = Inches(hanging_in)
-            pf.first_line_indent = Inches(-hanging_in)
         return p
 
     # ----- block renderers -----
 
     def _render_heading(self, b: HeadingBlock):
         h_spec = self.headings.get(f"Heading {b.level}", {}) or {}
-        align = h_spec.get("alignment", "left")
-        size = h_spec.get("font_size_pt", self.main_size)
-        bold = h_spec.get("bold", b.level == "A")
+        align  = h_spec.get("alignment", "left")
+        size   = h_spec.get("font_size_pt", self.main_size)
+        bold   = h_spec.get("bold",   b.level in ("A", "B"))
         italic = h_spec.get("italic", b.level == "C")
         case_rule = h_spec.get("case")
 
@@ -329,16 +353,32 @@ class DocxRenderer:
             text = text.title()
 
         prefix = f"{b.numbering} " if b.numbering else ""
+
         p = self._new_para(style=f"Heading {b.level}", alignment=align)
+
+        # Spacing from ruleset — fall back to template-measured defaults
+        sp_b_twips = h_spec.get("spacing_before_twips",
+                                 360 if b.level == "A" else 240)
+        sp_a_twips = h_spec.get("spacing_after_twips",
+                                 120 if b.level == "A" else 120)
+        # Template uses li=21.2pt / fi=-21.2pt when a numbering prefix exists
+        li_pt = 21.2 if prefix else 0.0
+        fi_pt = -21.2 if prefix else 0.0
+        _sp(p, before_pt=_t2pt(sp_b_twips), after_pt=_t2pt(sp_a_twips),
+            left_indent_pt=li_pt, first_line_pt=fi_pt,
+            line_spacing=1.0)
+
         run = p.add_run(prefix + text)
         run.font.name = self.main_font
         run.font.size = Pt(size)
-        run.bold = bold
+        run.bold   = bold
         run.italic = italic
 
     def _render_paragraph(self, b: ParagraphBlock):
         align = b.alignment or "justify"
         p = self._new_para(style=b.style or "Main Text", alignment=align)
+        # Template body paragraphs: sp_after=6pt, single spacing, no extra indent
+        _sp(p, after_pt=6.0, line_spacing=1.0)
         _add_paragraph_text(p, b.text, b.runs, self.main_font, self.main_size)
 
     def _render_table(self, b: TableBlock):
@@ -417,8 +457,12 @@ class DocxRenderer:
             run.font.size = Pt(max(self.table_size, 9))
 
     def _render_reference(self, b: ReferenceBlock):
-        hanging = self.refs_cfg.get("hanging_indent_in", 0.5)
-        p = self._new_para(style="Reference", alignment="left", hanging_in=hanging)
+        # Template-measured: li=14.2pt, fi=-14.2pt, sp_after=6pt, ls≈0.92
+        # (Our ruleset's 0.5 in = 36pt was 2.5× too large)
+        hang_pt = 14.2
+        p = self._new_para(style="Reference", alignment="justify")
+        _sp(p, after_pt=6.0, left_indent_pt=hang_pt, first_line_pt=-hang_pt,
+            line_spacing=0.92)
         if b.runs:
             _apply_runs(p, b.runs, self.main_font, self.main_size)
         else:
@@ -427,14 +471,61 @@ class DocxRenderer:
             run.font.size = Pt(self.main_size)
 
     def _render_equation(self, b: EquationBlock):
-        p = self._new_para(style="Equation", alignment="right")
-        text = b.text or b.latex or ""
-        if b.number:
-            text = f"{text}    ({b.number})"
-        run = p.add_run(text)
+        """MJCET spec: borderless 2-cell table — equation (left) | number (right)."""
+        from docx.shared import Twips
+        text     = b.text or b.latex or ""
+        num_text = f"({b.number})" if b.number else ""
+
+        # Add spacing above/below
+        sp_twips = self.ruleset.get("equations", {}).get("spacing_before_twips", 240)
+        sp_pt    = _t2pt(sp_twips)
+
+        tbl = self.doc.add_table(rows=1, cols=2)
+        tbl.autofit = False
+
+        # ≈85% for equation, ≈15% for number — total ≈ 8500 twips (body width)
+        try:
+            tbl.columns[0].width = Twips(7200)
+            tbl.columns[1].width = Twips(1300)
+        except Exception:
+            pass  # autofit fallback
+
+        # Invisible borders on all cells
+        for cell in tbl.rows[0].cells:
+            _set_cell_border(cell, top=False, bottom=False, left=False, right=False)
+            tc_pf = cell._tc.get_or_add_tcPr()
+            # Explicitly set all borders to "none"
+            from docx.oxml import OxmlElement as _OE
+            tcB = tc_pf.find(qn("w:tcBorders"))
+            if tcB is None:
+                tcB = _OE("w:tcBorders")
+                tc_pf.append(tcB)
+            for side in ("top", "left", "bottom", "right", "insideH", "insideV"):
+                el = _OE(f"w:{side}")
+                el.set(qn("w:val"), "none")
+                tcB.append(el)
+
+        # Equation cell (left)
+        eq_cell = tbl.rows[0].cells[0]
+        eq_cell.text = ""
+        p_eq = eq_cell.paragraphs[0]
+        p_eq.alignment = WD_ALIGN_PARAGRAPH.LEFT
+        _sp(p_eq, before_pt=sp_pt, after_pt=sp_pt)
+        run = p_eq.add_run(text)
         run.italic = True
         run.font.name = self.main_font
         run.font.size = Pt(self.main_size)
+
+        # Number cell (right)
+        num_cell = tbl.rows[0].cells[1]
+        num_cell.text = ""
+        p_num = num_cell.paragraphs[0]
+        p_num.alignment = WD_ALIGN_PARAGRAPH.RIGHT
+        _sp(p_num, before_pt=sp_pt, after_pt=sp_pt)
+        if num_text:
+            run2 = p_num.add_run(num_text)
+            run2.font.name = self.main_font
+            run2.font.size = Pt(self.main_size)
 
     # ----- front matter -----
 
@@ -448,6 +539,8 @@ class DocxRenderer:
 
         if md.title:
             p = self._new_para(style="Title", alignment="center")
+            # Template: title sp_after=12pt
+            _sp(p, after_pt=12.0)
             run = p.add_run(md.title)
             run.bold = title_bold
             run.font.name = self.main_font
@@ -455,12 +548,16 @@ class DocxRenderer:
 
         for author in md.authors:
             p = self._new_para(style="Author", alignment="center")
+            # Template: author sp_after=8pt, ls=1.25
+            _sp(p, after_pt=8.0, line_spacing=1.25)
             run = p.add_run(author)
             run.font.name = self.main_font
             run.font.size = Pt(author_sz)
 
         for aff in md.affiliations:
             p = self._new_para(style="Affiliation", alignment="center")
+            # Template: affiliation sp_after=0pt, ls≈0.83
+            _sp(p, after_pt=0.0, line_spacing=0.833)
             run = p.add_run(aff)
             run.italic = True
             run.font.name = self.main_font
@@ -468,6 +565,7 @@ class DocxRenderer:
 
         if md.abstract:
             p = self._new_para(style="Abstract", alignment="justify")
+            _sp(p, before_pt=8.0, after_pt=6.0, line_spacing=1.0)
             run = p.add_run("Abstract. ")
             run.bold = True
             run.font.name = self.main_font
@@ -479,6 +577,7 @@ class DocxRenderer:
 
         if md.keywords:
             p = self._new_para(alignment="left")
+            _sp(p, after_pt=6.0, line_spacing=1.0)
             r1 = p.add_run("Keywords: ")
             r1.italic = True
             r1.font.name = self.main_font
@@ -489,6 +588,7 @@ class DocxRenderer:
 
         if md.doi:
             p = self._new_para(alignment="left")
+            _sp(p, after_pt=12.0, line_spacing=1.0)
             r1 = p.add_run("DOI: ")
             r1.italic = True
             r1.font.name = self.main_font
