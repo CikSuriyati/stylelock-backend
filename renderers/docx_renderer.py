@@ -599,12 +599,48 @@ class DocxRenderer:
 
     # ----- public render -----
 
+    @staticmethod
+    def _assign_heading_numbers(blocks) -> None:
+        """Walk blocks and fill in HeadingBlock.numbering for any heading that
+        doesn't already have one.  This is the authoritative numbering pass so
+        DOCX and PDF always match the HTML preview."""
+        counters = {"A": 0, "B": 0, "C": 0}
+        for b in blocks:
+            if b.type != "heading":
+                continue
+            if b.numbering:
+                # Frontend already computed it — parse to keep counters in sync
+                parts = b.numbering.rstrip(".").split(".")
+                try:
+                    if b.level == "A":
+                        counters["A"] = int(parts[0]); counters["B"] = 0; counters["C"] = 0
+                    elif b.level == "B" and len(parts) >= 2:
+                        counters["B"] = int(parts[1]); counters["C"] = 0
+                    elif b.level == "C" and len(parts) >= 3:
+                        counters["C"] = int(parts[2])
+                except (ValueError, IndexError):
+                    pass
+            else:
+                # Compute fresh
+                if b.level == "A":
+                    counters["A"] += 1; counters["B"] = 0; counters["C"] = 0
+                    b.numbering = f"{counters['A']}."
+                elif b.level == "B":
+                    counters["B"] += 1; counters["C"] = 0
+                    b.numbering = f"{counters['A']}.{counters['B']}"
+                elif b.level == "C":
+                    counters["C"] += 1
+                    b.numbering = f"{counters['A']}.{counters['B']}.{counters['C']}"
+
     def build(self, document) -> Document:
         doc_obj = normalize_input(document)
         if self._has_template:
             self._inject_template_front_matter(doc_obj.metadata)
         else:
             self._render_front_matter(doc_obj.metadata)
+
+        # Ensure all headings have numbering (idempotent if frontend already set it)
+        self._assign_heading_numbers(doc_obj.blocks)
 
         for b in doc_obj.blocks:
             if b.type == "heading":

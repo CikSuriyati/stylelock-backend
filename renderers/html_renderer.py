@@ -482,6 +482,42 @@ def _build_article_info_table(md, ruleset: Dict[str, Any]) -> str:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+#  Heading numbering helper (shared with docx_renderer)
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _assign_heading_numbers(blocks) -> None:
+    """Walk blocks and fill in HeadingBlock.numbering for any heading that
+    doesn't already have one.  This is the authoritative numbering pass so
+    HTML, DOCX and PDF always match."""
+    counters: dict = {"A": 0, "B": 0, "C": 0}
+    for b in blocks:
+        if b.type != "heading":
+            continue
+        if b.numbering:
+            # Frontend already computed it — parse to keep counters in sync
+            parts = b.numbering.rstrip(".").split(".")
+            try:
+                if b.level == "A":
+                    counters["A"] = int(parts[0]); counters["B"] = 0; counters["C"] = 0
+                elif b.level == "B" and len(parts) >= 2:
+                    counters["B"] = int(parts[1]); counters["C"] = 0
+                elif b.level == "C" and len(parts) >= 3:
+                    counters["C"] = int(parts[2])
+            except (ValueError, IndexError):
+                pass
+        else:
+            if b.level == "A":
+                counters["A"] += 1; counters["B"] = 0; counters["C"] = 0
+                b.numbering = f"{counters['A']}."
+            elif b.level == "B":
+                counters["B"] += 1; counters["C"] = 0
+                b.numbering = f"{counters['A']}.{counters['B']}"
+            elif b.level == "C":
+                counters["C"] += 1
+                b.numbering = f"{counters['A']}.{counters['B']}.{counters['C']}"
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 #  Entrypoint
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -533,6 +569,9 @@ def render_html(document: Any, ruleset: Dict[str, Any], *, standalone: bool = Tr
         footer_line = f"{doi_val}   {copyright_text}" if doi_val else copyright_text
 
     css = _build_css(ruleset, header_line, footer_line)
+
+    # ── Assign heading numbering (idempotent) ─────────────────────
+    _assign_heading_numbers(doc.blocks)
 
     # ── Build body ────────────────────────────────────────────────
     body_parts: List[str] = []
