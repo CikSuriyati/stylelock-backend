@@ -87,6 +87,7 @@ class DocumentMetadata(BaseModel):
     volume: Optional[str] = None
     issue: Optional[str] = None
     year: Optional[str] = None
+    doi: Optional[str] = None
 
 
 class StructuredDocument(BaseModel):

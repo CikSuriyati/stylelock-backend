@@ -14,6 +14,7 @@ preserved. Otherwise we synthesize the styles from the ruleset.
 from __future__ import annotations
 
 import os
+import re
 from typing import Dict, Any, Optional, List
 
 from docx import Document
@@ -183,9 +184,14 @@ class DocxRenderer:
     # ----- template placeholder helpers -----
 
     @staticmethod
-    def _fill_para(para, text: str):
+    def _fill_para(para, text: str,
+                   font_name: str = "", font_size_pt: Optional[float] = None,
+                   bold: bool = False, italic: bool = False,
+                   alignment: Optional[str] = None):
         """Replace all runs in a template placeholder with new text.
-        Preserves the paragraph's style (font, size, colour come from the style).
+
+        Applies explicit character formatting so the result matches the
+        ruleset regardless of what the template's paragraph style says.
         """
         p_elem = para._element
         for r in list(p_elem.findall(qn("w:r"))):
@@ -193,7 +199,17 @@ class DocxRenderer:
         for hl in list(p_elem.findall(qn("w:hyperlink"))):
             p_elem.remove(hl)
         if text:
-            para.add_run(text)
+            run = para.add_run(text)
+            if font_name:
+                run.font.name = font_name
+            if font_size_pt:
+                run.font.size = Pt(font_size_pt)
+            if bold:
+                run.bold = True
+            if italic:
+                run.italic = True
+        if alignment and alignment in _ALIGN_MAP:
+            para.alignment = _ALIGN_MAP[alignment]
 
     @staticmethod
     def _fill_cell_text(cell, paragraphs_text: List[str]):
@@ -226,21 +242,34 @@ class DocxRenderer:
         """Fill the template's built-in placeholder paragraphs and the ARTICLE
         INFO table with manuscript front-matter.  Called instead of
         _render_front_matter when a GADING/MJCET template is loaded."""
+        tb = self.ruleset.get("title_block", {}) or {}
+        title_sz  = (tb.get("title",       {}) or {}).get("font_size_pt", 17)
+        title_bold= (tb.get("title",       {}) or {}).get("bold", False)
+        author_sz = (tb.get("author",      {}) or {}).get("font_size_pt", 13)
+        affil_sz  = (tb.get("affiliation", {}) or {}).get("font_size_pt",  8)
+
         paras = self.doc.paragraphs
         # para[2] = title placeholder
         if len(paras) > 2:
-            self._fill_para(paras[2], md.title or "")
+            self._fill_para(paras[2], md.title or "",
+                            font_name=self.main_font, font_size_pt=title_sz,
+                            bold=title_bold, alignment="center")
         # para[3] = author line (all authors joined)
         if len(paras) > 3:
-            self._fill_para(paras[3], ",  ".join(md.authors) if md.authors else "")
+            self._fill_para(paras[3], ",  ".join(md.authors) if md.authors else "",
+                            font_name=self.main_font, font_size_pt=author_sz,
+                            alignment="center")
         # para[4] = affiliation 1, para[5] = affiliation 2
         for slot, aff in enumerate(md.affiliations[:2]):
             if len(paras) > 4 + slot:
-                self._fill_para(paras[4 + slot], aff)
+                self._fill_para(paras[4 + slot], aff,
+                                font_name=self.main_font, font_size_pt=affil_sz,
+                                italic=True, alignment="center")
         # Clear any unused affiliation slots
         for slot in range(len(md.affiliations), 2):
             if len(paras) > 4 + slot:
-                self._fill_para(paras[4 + slot], "")
+                self._fill_para(paras[4 + slot], "",
+                                font_name=self.main_font, font_size_pt=affil_sz)
 
         if not self.doc.tables:
             return
@@ -254,7 +283,8 @@ class DocxRenderer:
         # Keywords → row 2, col 0 (structure: "Keywords:" header, then one kw per para)
         if md.keywords and len(tbl.rows) > 2 and len(tbl.rows[2].cells) > 0:
             kw_cell = tbl.rows[2].cells[0]
-            kw_list = [k.strip() for k in md.keywords.split(",") if k.strip()]
+            # Accept semicolons OR commas as keyword separator
+            kw_list = [k.strip() for k in re.split(r"[;,]", md.keywords) if k.strip()]
             # Preserve "Keywords:" header in para[0], fill paras[1..6], keep DOI block
             cell_paras = kw_cell.paragraphs
             for i, kw in enumerate(kw_list[:6]):
@@ -409,36 +439,43 @@ class DocxRenderer:
     # ----- front matter -----
 
     def _render_front_matter(self, md):
+        tb = self.ruleset.get("title_block", {}) or {}
+        title_sz   = (tb.get("title",       {}) or {}).get("font_size_pt", 17)
+        title_bold = (tb.get("title",       {}) or {}).get("bold", False)
+        author_sz  = (tb.get("author",      {}) or {}).get("font_size_pt", 13)
+        affil_sz   = (tb.get("affiliation", {}) or {}).get("font_size_pt",  8)
+        abs_sz     = (self.ruleset.get("abstract", {}) or {}).get("font_size_pt", self.main_size)
+
         if md.title:
             p = self._new_para(style="Title", alignment="center")
             run = p.add_run(md.title)
-            run.bold = True
+            run.bold = title_bold
             run.font.name = self.main_font
-            run.font.size = Pt(self.main_size + 2)
+            run.font.size = Pt(title_sz)
 
         for author in md.authors:
             p = self._new_para(style="Author", alignment="center")
             run = p.add_run(author)
             run.font.name = self.main_font
-            run.font.size = Pt(self.main_size)
+            run.font.size = Pt(author_sz)
 
         for aff in md.affiliations:
             p = self._new_para(style="Affiliation", alignment="center")
             run = p.add_run(aff)
             run.italic = True
             run.font.name = self.main_font
-            run.font.size = Pt(self.main_size)
+            run.font.size = Pt(affil_sz)
 
         if md.abstract:
             p = self._new_para(style="Abstract", alignment="justify")
             run = p.add_run("Abstract. ")
             run.bold = True
             run.font.name = self.main_font
-            run.font.size = Pt(self.main_size)
+            run.font.size = Pt(abs_sz)
             run2 = p.add_run(md.abstract)
             run2.italic = True
             run2.font.name = self.main_font
-            run2.font.size = Pt(self.main_size)
+            run2.font.size = Pt(abs_sz)
 
         if md.keywords:
             p = self._new_para(alignment="left")
@@ -447,6 +484,16 @@ class DocxRenderer:
             r1.font.name = self.main_font
             r1.font.size = Pt(self.main_size)
             r2 = p.add_run(md.keywords)
+            r2.font.name = self.main_font
+            r2.font.size = Pt(self.main_size)
+
+        if md.doi:
+            p = self._new_para(alignment="left")
+            r1 = p.add_run("DOI: ")
+            r1.italic = True
+            r1.font.name = self.main_font
+            r1.font.size = Pt(self.main_size)
+            r2 = p.add_run(md.doi)
             r2.font.name = self.main_font
             r2.font.size = Pt(self.main_size)
 

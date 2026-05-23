@@ -276,37 +276,90 @@ def _cell_text(cell: _Cell) -> str:
     return "\n".join(p.text for p in cell.paragraphs).strip()
 
 
-def _table_to_block(tbl: Table) -> Tuple[Optional[TableBlock], Optional[str]]:
+def _parse_article_info_left(cell_text: str) -> dict:
+    """Parse the left column of the MJCET/GADING article-info table.
+
+    Expected shape (may vary):
+        Article history:
+        Received DD Month YYYY
+        Revised  DD Month YYYY
+        Accepted DD Month YYYY
+        Available online DD Month YYYY
+
+        Keywords:
+        keyword1
+        keyword2
+        …
+
+        DOI:
+        10.24191/…
+    """
+    result: dict = {}
+
+    # ── Keywords ──────────────────────────────────────────────────
+    kw_match = re.search(
+        r"[Kk]eywords?:?\s*\n(.*?)(?:\n\n|\nDOI:|\nArticle|\Z)",
+        cell_text,
+        re.DOTALL,
+    )
+    if kw_match:
+        raw_kws = kw_match.group(1).strip()
+        kws = [k.strip() for k in re.split(r"[\n;,]+", raw_kws) if k.strip()]
+        if kws:
+            result["keywords"] = "; ".join(kws)
+
+    # ── DOI ───────────────────────────────────────────────────────
+    doi_match = re.search(r"DOI:?\s*\n?(\S+)", cell_text, re.IGNORECASE)
+    if doi_match:
+        result["doi"] = doi_match.group(1).strip()
+
+    return result
+
+
+def _table_to_block(tbl: Table) -> Tuple[Optional[TableBlock], Optional[dict]]:
     """Convert a python-docx Table to a TableBlock.
 
-    Returns (block, abstract_text). If the table is the Article Info /
-    Abstract layout table (3 columns, contains an "Abstract" cell), we
-    return (None, abstract_text) so the caller routes it into metadata
-    instead of emitting a TableBlock.
+    Returns (block, meta_extras).
+
+    If the table is the Article Info / Abstract layout table (3 columns,
+    contains "ABSTRACT" header), we return (None, meta_extras) where
+    meta_extras is a dict that may contain: abstract, keywords, doi.
+    The caller routes these into DocumentMetadata instead of a TableBlock.
     """
     cells_text = [[_cell_text(c) for c in row.cells] for row in tbl.rows]
 
-    # Detect the Article Info layout table: 3 columns, has a header row with
-    # "ARTICLE INFO" + "ABSTRACT", and an Abstract body in the right column.
+    # Detect the Article Info layout table: 3 columns, "ABSTRACT" header cell.
     flat_lower = " ".join(c.lower() for row in cells_text for c in row)
-    if ("abstract" in flat_lower and "article info" in flat_lower) or (
-        any(len(row) == 3 for row in cells_text)
-        and "abstract" in flat_lower
-    ):
-        # Best-effort: take the longest cell in the right-most column as abstract
-        abstract_candidates = []
-        for row in cells_text:
-            if len(row) >= 3 and row[-1]:
-                abstract_candidates.append(row[-1])
+    is_info_table = (
+        ("abstract" in flat_lower and "article info" in flat_lower)
+        or (any(len(row) == 3 for row in cells_text) and "abstract" in flat_lower)
+    )
+
+    if is_info_table:
+        meta: dict = {}
+
+        # ── Abstract — longest cell in the rightmost column ──────
+        abstract_candidates = [
+            row[-1] for row in cells_text if len(row) >= 3 and row[-1]
+        ]
         if abstract_candidates:
-            abstract_text = max(abstract_candidates, key=len)
-            return None, abstract_text
+            meta["abstract"] = max(abstract_candidates, key=len)
+
+        # ── Keywords + DOI from the left-column cells ─────────────
+        for row in cells_text:
+            if not row:
+                continue
+            left = row[0]
+            low = left.lower()
+            if "keywords" in low or "doi" in low:
+                meta.update(_parse_article_info_left(left))
+
+        return None, meta if meta else None
 
     # Ordinary data table
     if not cells_text:
         return None, None
     if len(cells_text) == 1:
-        # Single row — treat as header-only table
         return TableBlock(header=cells_text[0], rows=[]), None
     return TableBlock(header=cells_text[0], rows=cells_text[1:]), None
 
@@ -466,9 +519,15 @@ def ingest_docx(path: str) -> StructuredDocument:
         # -------- Table --------
         if isinstance(element, CT_Tbl):
             t = Table(element, doc)
-            block, abstract_from_layout = _table_to_block(t)
-            if abstract_from_layout and not metadata.abstract:
-                metadata.abstract = abstract_from_layout
+            block, meta_extras = _table_to_block(t)
+            if meta_extras is not None:
+                # Article-info layout table — route into metadata
+                if "abstract" in meta_extras and not metadata.abstract:
+                    metadata.abstract = meta_extras["abstract"]
+                if "keywords" in meta_extras and not metadata.keywords:
+                    metadata.keywords = meta_extras["keywords"]
+                if "doi" in meta_extras and not metadata.doi:
+                    metadata.doi = meta_extras["doi"]
                 continue
             if block is None:
                 continue
