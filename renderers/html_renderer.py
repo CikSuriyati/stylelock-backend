@@ -49,7 +49,8 @@ def _t2pt(twips: float) -> float:
 #  CSS generation
 # ─────────────────────────────────────────────────────────────────────────────
 
-def _build_css(ruleset: Dict[str, Any], header_line: str, footer_line: str) -> str:
+def _build_css(ruleset: Dict[str, Any], header_line: str, footer_line: str,
+               corr_note: str = "") -> str:
     fonts        = ruleset.get("fonts", {})
     main_fi      = fonts.get("main_text", {})
     table_fi     = fonts.get("table_text", {})
@@ -125,12 +126,26 @@ def _build_css(ruleset: Dict[str, Any], header_line: str, footer_line: str) -> s
     affil_size  = tb_affil.get("font_size_pt",   8)
     title_bold  = "bold" if tb_title.get("bold", False) else "normal"
 
-    # Escape header/footer strings for CSS content property
-    def css_str(s: str) -> str:
-        return s.replace("\\", "\\\\").replace('"', '\\"')
+    # GADING accent colour (orange-red matching journal logo)
+    ACCENT = "#C94800"
 
-    h_esc = css_str(header_line)
-    f_esc = css_str(footer_line)
+    # Escape strings for use inside CSS content: "" values
+    def css_str(s: str) -> str:
+        return s.replace("\\", "\\\\").replace('"', '\\"').replace("\n", "\\A ")
+
+    h_esc  = css_str(header_line)
+    # Split footer into DOI URL and copyright (separated by "   ")
+    footer_parts  = footer_line.rsplit("   ", 1) if "   " in footer_line else [footer_line, ""]
+    doi_url_esc   = css_str(footer_parts[0].strip())
+    copyright_esc = css_str(footer_parts[1].strip() if len(footer_parts) > 1 else "")
+    corr_esc      = css_str(corr_note)
+    # First-page @bottom-left: corr note (if any) + newline + DOI URL
+    if corr_esc and doi_url_esc:
+        first_bottom_left = f"{corr_esc}\\A {doi_url_esc}"
+    elif corr_esc:
+        first_bottom_left = corr_esc
+    else:
+        first_bottom_left = doi_url_esc
 
     return f"""
 @import url("https://fonts.googleapis.com/css2?family=Tinos:ital,wght@0,400;0,700;1,400;1,700&display=swap");
@@ -140,40 +155,67 @@ def _build_css(ruleset: Dict[str, Any], header_line: str, footer_line: str) -> s
   size: 182mm 257mm;
   margin: {top_margin:.1f}mm {m_right:.1f}mm {bottom_margin:.1f}mm {m_left:.1f}mm;
 
+  /* Running header: page number (left) + centred journal citation */
   @top-left {{
-    content: "{h_esc}";
+    content: counter(page);
     font-family: 'Tinos', '{main_family}', serif;
-    font-size: 8pt;
-    font-style: italic;
+    font-size: 9pt;
     vertical-align: bottom;
     padding-bottom: 1.5mm;
     border-bottom: 0.5pt solid #000;
-    width: 100%;
+  }}
+  @top-center {{
+    content: "{h_esc}";
+    font-family: 'Tinos', '{main_family}', serif;
+    font-size: 9pt;
+    font-style: italic;
+    text-align: center;
+    vertical-align: bottom;
+    padding-bottom: 1.5mm;
+    border-bottom: 0.5pt solid #000;
   }}
 
+  /* Footer: DOI (left) + copyright (right) */
   @bottom-left {{
-    content: "{f_esc}";
+    content: "{doi_url_esc}";
     font-family: 'Tinos', '{main_family}', serif;
     font-size: 7pt;
     vertical-align: top;
     padding-top: 1.5mm;
     border-top: 0.5pt solid #000;
-    width: 80%;
   }}
-
   @bottom-right {{
-    content: counter(page);
+    content: "{copyright_esc}";
     font-family: 'Tinos', '{main_family}', serif;
-    font-size: 8pt;
+    font-size: 7pt;
     vertical-align: top;
     padding-top: 1.5mm;
     text-align: right;
   }}
 }}
 
-/* First page: suppress running header (it has its own layout) */
+/* First page: no running header; footer = corr-author note + DOI / copyright */
 @page :first {{
-  @top-left {{ content: ""; border-bottom: none; }}
+  @top-left   {{ content: ""; border-bottom: none; }}
+  @top-center {{ content: ""; border-bottom: none; }}
+  @bottom-left {{
+    content: "{first_bottom_left}";
+    white-space: pre;
+    font-family: 'Tinos', '{main_family}', serif;
+    font-size: 7pt;
+    font-style: italic;
+    vertical-align: top;
+    padding-top: 1.5mm;
+    border-top: 0.5pt solid #000;
+  }}
+  @bottom-right {{
+    content: "{copyright_esc}";
+    font-family: 'Tinos', '{main_family}', serif;
+    font-size: 7pt;
+    vertical-align: top;
+    padding-top: 1.5mm;
+    text-align: right;
+  }}
 }}
 
 /* ── Base ────────────────────────────────────────────────────── */
@@ -205,7 +247,7 @@ body {{
   font-weight: {title_bold};
   text-align: center;
   line-height: 1.25;
-  margin: 0 0 8pt;
+  margin: 0 0 10pt;
 }}
 
 .meta-authors {{
@@ -221,32 +263,48 @@ body {{
   margin: 0 0 3pt;
 }}
 
+/* one blank line spacer between last affiliation and article-info table */
+.affil-spacer {{ height: {main_size}pt; display: block; }}
+
 /* ── Article-info table ──────────────────────────────────────── */
 .article-info-table {{
   width: 100%;
   border-collapse: collapse;
-  border-top: 2pt solid #000;
-  border-bottom: 2pt solid #000;
-  margin: 10pt 0 14pt;
+  border-top: 1pt solid #000;
+  border-bottom: 1pt solid #000;
+  margin: 0 0 14pt;
   font-size: {main_size}pt;
   line-height: {line_height};
 }}
 
+.article-info-table th,
 .article-info-table td {{
   vertical-align: top;
-  padding: 4pt 0;
+  padding: 3pt 0;
   border: none;
 }}
 
-.article-info-left  {{ width: 32%; padding-right: 6pt; }}
-.article-info-gutter {{ width: 2%; border-left: 0.5pt solid #bbb; }}
-.article-info-right {{ width: 66%; padding-left: 8pt; }}
+/* Header row: ARTICLE INFO / ABSTRACT labels */
+.article-info-table thead th {{
+  font-size: {main_size}pt;
+  font-weight: bold;
+  text-transform: uppercase;
+  border-bottom: 0.5pt solid #000;
+  padding-bottom: 3pt;
+}}
 
-.info-section {{ margin-bottom: 6pt; }}
-.info-label {{ font-weight: bold; font-size: {main_size}pt; display: block; margin-bottom: 1pt; }}
-.info-date-row {{ display: block; font-size: {max(main_size - 1, 7)}pt; }}
-.info-doi {{ font-size: {max(main_size - 1, 7)}pt; word-break: break-all; }}
-.abstract-label {{ font-weight: bold; font-style: italic; }}
+.article-info-left   {{ width: 32%; padding-right: 6pt; }}
+.article-info-gutter {{ width: 2%;  border-left: 0.5pt solid #000; }}
+.article-info-right  {{ width: 66%; padding-left: 8pt; }}
+
+.info-section  {{ margin-bottom: 4pt; }}
+/* Labels are italic (not bold) per published format */
+.info-label    {{ font-style: italic; font-size: {main_size}pt; display: block; margin-bottom: 1pt; }}
+/* Dates and DOI in journal accent colour */
+.info-date-row {{ display: block; font-size: {max(main_size - 1, 8)}pt; color: {ACCENT}; }}
+.info-kw-row   {{ display: block; font-size: {max(main_size - 1, 8)}pt; }}
+.info-doi      {{ font-size: {max(main_size - 1, 8)}pt; color: {ACCENT}; word-break: break-all; }}
+.abstract-label {{ font-weight: bold; text-transform: uppercase; }}
 
 /* ── Headings ────────────────────────────────────────────────── */
 h2.heading-A {{ {h_style("Heading A", main_size)} }}
@@ -267,17 +325,20 @@ p.no-indent {{
 
 /* ── Tables ──────────────────────────────────────────────────── */
 table.data-table {{
-  width: 100%;
   border-collapse: collapse;
   font-size: {table_size}pt;
   margin: 4pt 0 2pt;
-  line-height: 1.2;
+  line-height: 1.3;
   page-break-inside: avoid;
+  text-align: left;
+  /* left-aligned, not full-width forced — matches published paper */
+  min-width: 60%;
+  max-width: 100%;
 }}
 
 table.data-table th,
 table.data-table td {{
-  padding: 2pt 4pt;
+  padding: 2pt 6pt;
   border: none;
   text-align: left;
 }}
@@ -294,15 +355,15 @@ table.data-table tbody tr:last-child td {{
 
 p.table-caption {{
   font-size: {table_size}pt;
-  font-weight: bold;
   text-align: left;
   margin: 6pt 0 2pt;
   text-indent: 0;
 }}
+/* "Table X." part in caption is rendered as <strong> in the HTML */
 
 /* ── Figures ──────────────────────────────────────────────────── */
 figure.figure-block {{
-  text-align: center;
+  text-align: left;
   margin: 10pt 0;
   page-break-inside: avoid;
 }}
@@ -323,6 +384,25 @@ p.reference-entry {{
   text-indent: -{hang_in}in;
   margin: 0 0 {ref_sp_a:.1f}pt;
   line-height: {line_height};
+}}
+
+/* ── CC licence block ─────────────────────────────────────────── */
+.cc-block {{
+  display: flex;
+  align-items: flex-start;
+  gap: 8pt;
+  margin: 14pt 0 10pt;
+  font-size: {max(main_size - 1, 8)}pt;
+  line-height: 1.3;
+}}
+.cc-block img {{ width: 48pt; flex-shrink: 0; }}
+
+/* ── About the Author ────────────────────────────────────────── */
+.about-author-body {{
+  font-size: {main_size}pt;
+  line-height: {line_height};
+  text-align: justify;
+  margin: 4pt 0 0;
 }}
 
 /* ── Equations ────────────────────────────────────────────────── */
@@ -379,7 +459,11 @@ def _render_paragraph(b: ParagraphBlock) -> str:
     return f'<p class="main-text"{align_attr}>{_para_inner(b.text, b.runs)}</p>'
 
 
+_table_counter = [0]   # module-level counter reset per document in render_html
+_figure_counter = [0]
+
 def _render_table(b: TableBlock) -> str:
+    _table_counter[0] += 1
     parts = ['<table class="data-table">']
     if b.header:
         parts.append("<thead><tr>")
@@ -394,14 +478,22 @@ def _render_table(b: TableBlock) -> str:
         parts.append("</tbody>")
     parts.append("</table>")
     if b.caption:
-        parts.append(f'<p class="table-caption">{escape(b.caption)}</p>')
+        # "Table X." in bold, then plain caption text — matches published format
+        cap_text = escape(b.caption)
+        parts.append(f'<p class="table-caption"><strong>Table {_table_counter[0]}.</strong> {cap_text}</p>')
     return "\n".join(parts)
 
 
 def _render_figure(b: FigureBlock) -> str:
+    _figure_counter[0] += 1
     src = escape(b.src or "")
     alt = escape(b.alt or b.caption or "Figure")
-    cap = f"<figcaption>{escape(b.caption)}</figcaption>" if b.caption else ""
+    # Caption: "Fig. X. caption text" — matches published format
+    if b.caption:
+        cap_text = escape(b.caption)
+        cap = f"<figcaption><strong>Fig. {_figure_counter[0]}.</strong> {cap_text}</figcaption>"
+    else:
+        cap = ""
     if src:
         img = f'<img src="{src}" alt="{alt}" />'
     else:
@@ -438,46 +530,78 @@ def _build_article_info_table(md, ruleset: Dict[str, Any]) -> str:
     # ── Left column ──────────────────────────────────────────────
     left_html = ""
 
-    # Article history (fields not in schema — skip gracefully)
+    # Article history — "Article history:" italic label, dates in accent colour, one per line
     history_dates = []
-    for attr, label in [("received","Received"), ("revised","Revised"),
-                         ("accepted","Accepted"), ("published","Published")]:
+    for attr, label in [("received", "Received"), ("revised", "Revised"),
+                        ("accepted", "Accepted"), ("online_first", "Online first"),
+                        ("published", "Published")]:
         val = getattr(md, attr, None)
         if val:
             history_dates.append((label, val))
 
     if history_dates:
-        rows = "".join(f'<span class="info-date-row">{label}: {escape(str(d))}</span>'
-                       for label, d in history_dates)
-        left_html += f'<div class="info-section"><span class="info-label">Article History</span>{rows}</div>'
+        rows = "".join(
+            f'<span class="info-date-row">{label}&nbsp;&nbsp;{escape(str(d))}</span>'
+            for label, d in history_dates
+        )
+        left_html += (
+            f'<div class="info-section">'
+            f'<span class="info-label">Article history:</span>{rows}</div>'
+        )
 
+    # Keywords — one per line (split by semicolon or comma)
     if md.keywords:
-        kws = escape(md.keywords)
-        left_html += f'<div class="info-section"><span class="info-label">Keywords</span>{kws}</div>'
+        import re as _re
+        kw_list = [k.strip() for k in _re.split(r"[;,]", md.keywords) if k.strip()]
+        kw_rows = "".join(f'<span class="info-kw-row">{escape(k)}</span>' for k in kw_list)
+        left_html += (
+            f'<div class="info-section">'
+            f'<span class="info-label">Keywords:</span>{kw_rows}</div>'
+        )
 
+    # DOI — in accent colour
     doi = getattr(md, "doi", None)
     if doi:
-        left_html += f'<div class="info-section"><span class="info-label">DOI</span><span class="info-doi">{escape(doi)}</span></div>'
+        left_html += (
+            f'<div class="info-section">'
+            f'<span class="info-label">DOI:</span>'
+            f'<span class="info-doi">{escape(doi)}</span></div>'
+        )
 
     # ── Right column ─────────────────────────────────────────────
     right_html = ""
     if md.abstract:
-        right_html = f'<span class="abstract-label">Abstract</span> {escape(md.abstract)}'
+        right_html = escape(md.abstract)
 
     # Only emit the table if there's content on at least one side
     if not left_html and not right_html:
         return ""
 
-    # If left is empty, make right span full width
+    # If left is empty, span full width
     if not left_html:
-        return f'<div style="border-top:2pt solid #000;border-bottom:2pt solid #000;margin:10pt 0 14pt;padding:4pt 0;"><span class="abstract-label">Abstract</span> {escape(md.abstract or "")}</div>'
+        return (
+            f'<div style="border-top:1pt solid #000;border-bottom:1pt solid #000;'
+            f'margin:0 0 14pt;padding:4pt 0;">'
+            f'<strong class="abstract-label">ABSTRACT</strong><br/>'
+            f'{escape(md.abstract or "")}</div>'
+        )
 
+    # Full 3-column table with ARTICLE INFO / ABSTRACT header row
     return f"""<table class="article-info-table">
-  <tr>
-    <td class="article-info-left">{left_html}</td>
-    <td class="article-info-gutter"></td>
-    <td class="article-info-right">{right_html}</td>
-  </tr>
+  <thead>
+    <tr>
+      <th class="article-info-left">ARTICLE INFO</th>
+      <th class="article-info-gutter"></th>
+      <th class="article-info-right">ABSTRACT</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td class="article-info-left">{left_html}</td>
+      <td class="article-info-gutter"></td>
+      <td class="article-info-right">{right_html}</td>
+    </tr>
+  </tbody>
 </table>"""
 
 
@@ -533,6 +657,10 @@ def render_html(document: Any, ruleset: Dict[str, Any], *, standalone: bool = Tr
     doc = normalize_input(document)
     md  = doc.metadata
 
+    # Reset per-document counters
+    _table_counter[0] = 0
+    _figure_counter[0] = 0
+
     # ── Build running header text ─────────────────────────────────
     journal_info = ruleset.get("journal", {})
     journal_name = journal_info.get("name", "")
@@ -558,17 +686,27 @@ def render_html(document: Any, ruleset: Dict[str, Any], *, standalone: bool = Tr
             .replace("No. X",  f"No. {issue}"))
     else:
         short = journal_info.get("short_name", journal_name or "Journal")
-        header_line = f"{first_author} et al. / {short} ({year}) Vol. {volume}, No. {issue}"
+        header_line = f"{first_author} / {short} ({year}) Vol. {volume}, No. {issue}"
 
-    # Footer
+    # Footer line — split into DOI URL part and copyright part (separated by "   ")
     doi_val = getattr(md, "doi", None) or journal_info.get("doi_pattern", "")
+    doi_url = f"https://doi.org/{doi_val}" if doi_val and not doi_val.startswith("http") else doi_val or ""
     copyright_text = journal_info.get("copyright_text", "©UiTM Press")
-    if footer_tmpl:
-        footer_line = footer_tmpl
-    else:
-        footer_line = f"{doi_val}   {copyright_text}" if doi_val else copyright_text
+    # Build copyright with first-author surname + year
+    copyright_out = f"©{first_author}, {year}" if year != "Year" else copyright_text
+    footer_line = f"{doi_url}   {copyright_out}" if doi_url else copyright_out
 
-    css = _build_css(ruleset, header_line, footer_line)
+    # Corresponding author note for first-page footer
+    corr_name  = md.authors[0] if md.authors else ""
+    corr_email = getattr(md, "email", None) or ""
+    if corr_email:
+        corr_note = f"1* Corresponding author. {corr_name}. E-mail address: {corr_email}"
+    elif corr_name:
+        corr_note = f"1* Corresponding author. {corr_name}."
+    else:
+        corr_note = ""
+
+    css = _build_css(ruleset, header_line, footer_line, corr_note)
 
     # ── Assign heading numbering (idempotent) ─────────────────────
     _assign_heading_numbers(doc.blocks)
@@ -588,6 +726,10 @@ def render_html(document: Any, ruleset: Dict[str, Any], *, standalone: bool = Tr
         body_parts.append(f'<div class="meta-authors">{escape(author)}</div>')
     for aff in md.affiliations:
         body_parts.append(f'<div class="meta-affiliation">{escape(aff)}</div>')
+
+    # One blank line between last affiliation and article-info table
+    if md.affiliations:
+        body_parts.append('<span class="affil-spacer"></span>')
 
     # Article-info table (abstract + keywords + history)
     info_table = _build_article_info_table(md, ruleset)

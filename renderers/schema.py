@@ -88,6 +88,7 @@ class DocumentMetadata(BaseModel):
     issue: Optional[str] = None
     year: Optional[str] = None
     doi: Optional[str] = None
+    email: Optional[str] = None           # corresponding author e-mail (first author)
 
 
 class StructuredDocument(BaseModel):
