@@ -604,33 +604,31 @@ class DocxRenderer:
         """Walk blocks and fill in HeadingBlock.numbering for any heading that
         doesn't already have one.  This is the authoritative numbering pass so
         DOCX and PDF always match the HTML preview."""
-        counters = {"A": 0, "B": 0, "C": 0}
+        counters = {"A": 0, "B": 0}
         for b in blocks:
             if b.type != "heading":
+                continue
+            # Heading C: bold, no numbering — always clear it
+            if b.level == "C":
+                b.numbering = None
                 continue
             if b.numbering:
                 # Frontend already computed it — parse to keep counters in sync
                 parts = b.numbering.rstrip(".").split(".")
                 try:
                     if b.level == "A":
-                        counters["A"] = int(parts[0]); counters["B"] = 0; counters["C"] = 0
+                        counters["A"] = int(parts[0]); counters["B"] = 0
                     elif b.level == "B" and len(parts) >= 2:
-                        counters["B"] = int(parts[1]); counters["C"] = 0
-                    elif b.level == "C" and len(parts) >= 3:
-                        counters["C"] = int(parts[2])
+                        counters["B"] = int(parts[1])
                 except (ValueError, IndexError):
                     pass
             else:
-                # Compute fresh
                 if b.level == "A":
-                    counters["A"] += 1; counters["B"] = 0; counters["C"] = 0
+                    counters["A"] += 1; counters["B"] = 0
                     b.numbering = f"{counters['A']}."
                 elif b.level == "B":
-                    counters["B"] += 1; counters["C"] = 0
+                    counters["B"] += 1
                     b.numbering = f"{counters['A']}.{counters['B']}"
-                elif b.level == "C":
-                    counters["C"] += 1
-                    b.numbering = f"{counters['A']}.{counters['B']}.{counters['C']}"
 
     def build(self, document) -> Document:
         doc_obj = normalize_input(document)

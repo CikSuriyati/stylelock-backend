@@ -110,8 +110,8 @@
       }
     },
     "Heading C": {
-      "bold": false,
-      "italic": true,
+      "bold": true,
+      "italic": false,
       "font_size_pt": 10,
       "alignment": "left",
       "spacing_before_twips": 240,

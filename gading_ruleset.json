@@ -31,7 +31,9 @@
       "italic": true
     },
     "Heading C": {
-      "alignment": "left"
+      "alignment": "left",
+      "bold": true,
+      "italic": false
     }
   },
   "tables": {
